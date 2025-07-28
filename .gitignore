@@ -8,3 +8,4 @@ docs/pydoc
 *.gz
 *.psf
 *.flf
+*.txt

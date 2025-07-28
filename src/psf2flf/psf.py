@@ -1,7 +1,6 @@
 import gzip
 import struct
-from pathlib import Path
-from typing import List, Dict, Union
+from typing import List, Dict
 
 
 class PSFParseError(Exception):
@@ -10,90 +9,149 @@ class PSFParseError(Exception):
 
 class PSFFont:
     def __init__(self, data: bytes):
-        self.glyphs: List[bytes] = []
+        self.glyphs: List[List[List[bool]]] = []  # Store as 2D pixel arrays
         self.unicode_map: Dict[int, List[int]] = {}
         self.width: int = 8
         self.height: int = 0
         self._parse(data)
 
     def _parse(self, data: bytes):
-        if data.startswith(b"\x36\x04"):
+        if data[0:2] == b"\x36\x04":
             self._parse_psf1(data)
-        elif data.startswith(b"\x72\xb5\x4a\x86"):
+        elif data[0:4] == b"\x72\xb5\x4a\x86":
             self._parse_psf2(data)
         else:
-            raise PSFParseError("Unrecognized PSF magic")
+            raise PSFParseError("Not a PSF file")
 
     def _parse_psf1(self, data: bytes):
         mode = data[2]
-        charsize = data[3]
-        has_unicode_table = mode & 0x02 or mode & 0x04
-        glyph_count = 512 if mode & 0x01 else 256
-        self.height = charsize
-        self.width = 8
-        glyph_data = data[4 : 4 + glyph_count * charsize]
-        self.glyphs = [glyph_data[i * charsize : (i + 1) * charsize] for i in range(glyph_count)]
+        height = data[3]
 
-        if has_unicode_table:
-            table = data[4 + glyph_count * charsize :]
-            self._parse_unicode_table_psf1(table, glyph_count)
+        if mode > 0x111:
+            raise PSFParseError("Unknown mode")
+
+        glyphs = 512 if mode & 0b001 else 256
+        width = 8
+        char_size = height
+        bytes_per_row = 1
+
+        self.height = height
+        self.width = width
+        self.flags = 0
+        self.headersize = 4
+        self.length = glyphs
+        self.charsize = char_size
+        self.glyph_data_start = 4
+        self.glyph_data_length = glyphs * char_size
+        self.unicode_data_start = 4 + glyphs * char_size
+        self.unicode_data_length = len(data) - self.unicode_data_start
+
+        # Read glyphs using Perl logic
+        self._read_glyphs(data, 4, glyphs, height, width, char_size, bytes_per_row)
 
     def _parse_psf2(self, data: bytes):
-        if len(data) < 32:
-            raise PSFParseError("PSF2 header too short")
-        header = struct.unpack("<IIIIIIII", data[0:32])
-        magic, version, headersize, flags, length, charsize, width, height = header
-        if magic != 0x864AB572:
-            raise PSFParseError("Bad PSF2 magic")
-        glyph_data = data[headersize : headersize + length * charsize]
-        self.glyphs = [glyph_data[i * charsize : (i + 1) * charsize] for i in range(length)]
-        self.width = width
+        header = struct.unpack("<7I", data[4:32])  # Skip magic, read 7 values
+        (
+            version,
+            header_size,
+            flags,
+            glyphs,
+            char_size,
+            height,
+            width,
+        ) = header
+
+        if version != 0:
+            raise PSFParseError("Unknown sub-version")
+        if header_size != 32:
+            raise PSFParseError("Unknown header size")
+
+        bytes_per_row = (width + 7) // 8
+        if char_size != height * bytes_per_row:
+            raise PSFParseError("Mismatch in char byte size")
+
         self.height = height
-        if flags & 0x01:
-            table = data[headersize + length * charsize :]
-            self._parse_unicode_table_psf2(table, length)
+        self.width = width
+        self.flags = flags
+        self.headersize = header_size
+        self.length = glyphs
+        self.charsize = char_size
+        self.glyph_data_start = header_size
+        self.glyph_data_length = glyphs * char_size
+        self.unicode_data_start = header_size + glyphs * char_size
+        self.unicode_data_length = len(data) - self.unicode_data_start
 
-    def _parse_unicode_table_psf1(self, table: bytes, glyph_count: int):
-        index = 0
-        for glyph_index in range(glyph_count):
-            codepoints = []
-            while index < len(table):
-                u = table[index] | (table[index + 1] << 8)
-                index += 2
-                if u == 0xFFFF:
-                    break
-                if u == 0xFFFE:
-                    continue  # sequences not supported
-                codepoints.append(u)
-            self.unicode_map[glyph_index] = codepoints
+        # Read glyphs using Perl logic
+        self._read_glyphs(data, header_size, glyphs, height, width, char_size, bytes_per_row)
 
-    def _parse_unicode_table_psf2(self, table: bytes, glyph_count: int):
-        index = 0
-        for glyph_index in range(glyph_count):
-            codepoints = []
-            while index < len(table):
-                first = table[index]
-                index += 1
-                if first == 0xFF:
-                    break
-                elif first == 0xFE:
-                    continue  # sequences not supported
+        # Parse unicode table if present
+        if flags & 1:
+            self._parse_unicode_table(data, header_size + glyphs * char_size)
+
+    def _read_glyphs(
+        self, data: bytes, offset: int, glyph_count: int, height: int, width: int, char_size: int, bytes_per_row: int
+    ):
+        """Read glyphs exactly like the Perl script"""
+        data_pos = offset
+
+        for glyph_idx in range(glyph_count):
+            glyph_pixels = []
+
+            for y in range(height):
+                row_pixels = []
+                x = 0
+
+                for byte_idx in range(bytes_per_row):
+                    if data_pos < len(data):
+                        byte_value = data[data_pos]
+                        data_pos += 1
+                    else:
+                        byte_value = 0
+
+                    # Process bits MSB first (bit 8 down to 1)
+                    for bit in range(8):
+                        if x < width:  # Only if within width
+                            pixel_on = bool(byte_value & (1 << (7 - bit)))
+                            row_pixels.append(pixel_on)
+                            x += 1
+
+                glyph_pixels.append(row_pixels)
+
+            self.glyphs.append(glyph_pixels)
+
+    def _parse_unicode_table(self, data: bytes, offset: int):
+        """Parse PSF2 unicode mapping table"""
+        pos = offset
+        glyph_index = 0
+
+        while pos < len(data) and glyph_index < len(self.glyphs):
+            unicode_list = []
+
+            # Read unicode codepoints for this glyph
+            while pos < len(data):
+                if pos + 1 < len(data):
+                    # Read 16-bit unicode value
+                    unicode_val = struct.unpack("<H", data[pos : pos + 2])[0]
+                    pos += 2
+
+                    if unicode_val == 0xFFFF:
+                        # End of sequence for this glyph
+                        break
+                    elif unicode_val == 0xFFFE:
+                        # Start of sequence - not implemented
+                        continue
+                    else:
+                        unicode_list.append(unicode_val)
                 else:
-                    # Decode UTF-8 sequence
-                    start = index - 1
-                    while index < len(table) and table[index] & 0xC0 == 0x80:
-                        index += 1
-                    try:
-                        cp = bytes([first] + list(table[start + 1 : index]))
-                        u = cp.decode("utf-8")
-                        codepoints.append(ord(u))
-                    except Exception:
-                        pass
-            self.unicode_map[glyph_index] = codepoints
+                    break
+
+            if unicode_list:
+                self.unicode_map[glyph_index] = unicode_list
+
+            glyph_index += 1
 
 
-def load_psf_file(path: Union[str, Path]) -> PSFFont:
-    path = Path(path)
-    with gzip.open(path, "rb") if path.suffix == ".gz" else open(path, "rb") as f:
+def load_psf_file(path):
+    with gzip.open(path, "rb") if str(path).endswith(".gz") else open(path, "rb") as f:
         data = f.read()
     return PSFFont(data)
