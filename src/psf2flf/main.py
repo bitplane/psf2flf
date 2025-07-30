@@ -1,4 +1,5 @@
 import argparse
+import sys
 from pathlib import Path
 
 from .reader import read
@@ -39,7 +40,7 @@ def convert_all(source_dir: Path, dest_dir: Path, tall_mode: bool = False):
             print(f"{path}\tERROR: {e}")
 
 
-def main():
+def cli(argv):
     parser = argparse.ArgumentParser(description="Convert PSF fonts to FLF (FIGlet) format.")
     parser.add_argument("source", nargs="?", help="PSF font file or input directory")
     parser.add_argument("dest", nargs="?", help="Output file (single) or directory (--all)")
@@ -48,7 +49,7 @@ def main():
     parser.add_argument(
         "--tall", action="store_true", help="Use full-size 1:1 pixel mapping instead of default 2x1 compression"
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.info:
         if not args.source:
@@ -63,6 +64,12 @@ def main():
             parser.error("You must provide a source PSF file and dest file.")
         convert_single(Path(args.source), Path(args.dest), tall_mode=args.tall)
 
+    return 0
+
+
+def main():
+    return cli(sys.argv[1:])
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
