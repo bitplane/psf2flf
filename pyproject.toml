@@ -20,7 +20,8 @@ dev = [
     "pytest-cov",
     "build",
     "twine",
-    "ruff"
+    "ruff",
+    "pyfiglet"
 ]
 
 [project.scripts]

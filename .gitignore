@@ -9,3 +9,4 @@ docs/pydoc
 *.psf
 *.flf
 *.txt
+.grok
