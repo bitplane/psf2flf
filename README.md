@@ -2,3 +2,8 @@
 
 Converts bitmap fonts to figlet fonts.
 
+
+## todo
+
+- [ ] support 
+

@@ -71,7 +71,7 @@ def show_info(source: Path):
         print(f"Unicode mapping entries: {len(font.unicode_map)}")
 
 
-def convert_single(source: Path, dest: Path, use_short_blocks: bool = True):
+def convert_single(source: Path, dest: Path, tall_mode: bool = False):
     font = load_psf_file(source)
 
     # For single file conversion, dest is the output file
@@ -87,17 +87,17 @@ def convert_single(source: Path, dest: Path, use_short_blocks: bool = True):
     # Convert with the specified output path
     from .psf2flf import write_flf_file
 
-    write_flf_file(font, out_path, use_short_blocks)
+    write_flf_file(font, out_path, tall_mode)
     print(f"{source}\t{out_path}")
 
 
-def convert_all(source_dir: Path, dest_dir: Path, use_short_blocks: bool = True):
+def convert_all(source_dir: Path, dest_dir: Path, tall_mode: bool = False):
     psf_files = list(source_dir.glob("*.psf")) + list(source_dir.glob("*.psf.gz"))
     for path in psf_files:
         try:
             font = load_psf_file(path)
             name = path.stem.replace(".psf", "").replace(".gz", "")
-            out_path = convert_psf_to_flf(font, name, dest_dir, use_short_blocks)
+            out_path = convert_psf_to_flf(font, name, dest_dir, tall_mode)
             print(f"{path}\t{out_path}")
         except Exception as e:
             print(f"{path}\tERROR: {e}")
@@ -119,11 +119,11 @@ def main():
     elif args.all:
         if not args.source or not args.dest:
             parser.error("You must provide source and dest directories when using --all.")
-        convert_all(Path(args.source), Path(args.dest), not args.tall)
+        convert_all(Path(args.source), Path(args.dest), tall_mode=args.tall)
     else:
         if not args.source or not args.dest:
             parser.error("You must provide a source PSF file and dest file.")
-        convert_single(Path(args.source), Path(args.dest), not args.tall)
+        convert_single(Path(args.source), Path(args.dest), tall_mode=args.tall)
 
 
 if __name__ == "__main__":

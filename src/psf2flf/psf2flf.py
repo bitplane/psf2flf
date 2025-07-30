@@ -53,13 +53,13 @@ def bitmap_to_pixels(bitmap: bytes, width: int, height: int) -> list[list[bool]]
 
 
 def render_block_glyph(
-    pixel_array: list[list[bool]], width: int, height: int, use_short_blocks: bool = True
+    pixel_array: list[list[bool]], width: int, height: int, tall_mode: bool = False
 ) -> list[str]:
     """Render a glyph using block characters from pixel data."""
-    if use_short_blocks:
-        return render_short_blocks(pixel_array, width, height)
-    else:
+    if tall_mode:
         return render_full_pixels(pixel_array, width, height)
+    else:
+        return render_short_blocks(pixel_array, width, height)
 
 
 def render_short_blocks(pixel_array: list[list[bool]], width: int, height: int) -> list[str]:
@@ -103,26 +103,26 @@ def render_full_pixels(pixel_array: list[list[bool]], width: int, height: int) -
     return lines
 
 
-def calculate_flf_dimensions(font_width: int, font_height: int, use_short_blocks: bool):
+def calculate_flf_dimensions(font_width: int, font_height: int, tall_mode: bool = False):
     """Calculate FLF output dimensions based on font size and compression mode."""
-    if use_short_blocks:
-        # 2x1 block compression (top/bottom)
-        fig_height = (font_height + 1) // 2
+    if tall_mode:
+        # Special case: 1:1 pixel mapping
+        fig_height = font_height
         max_length = font_width
         display_width = font_width
     else:
-        # 1:1 pixel mapping
-        fig_height = font_height
+        # Default: 2x1 block compression (top/bottom)
+        fig_height = (font_height + 1) // 2
         max_length = font_width
         display_width = font_width
 
     return fig_height, max_length, display_width
 
 
-def write_flf_file(font: PSFFont, output_path: Path, use_short_blocks: bool = True):
+def write_flf_file(font: PSFFont, output_path: Path, tall_mode: bool = False):
     """Write FLF file with proper formatting."""
     height, width = font.height, font.width
-    fig_height, max_length, display_width = calculate_flf_dimensions(width, height, use_short_blocks)
+    fig_height, max_length, display_width = calculate_flf_dimensions(width, height, tall_mode)
 
     hardblank = "$"
     layout = 0
@@ -132,7 +132,7 @@ def write_flf_file(font: PSFFont, output_path: Path, use_short_blocks: bool = Tr
         for ch in GLYPHS:
             code = ord(ch)
             glyph = font.glyphs[code] if code < len(font.glyphs) else font.glyphs[DEFAULT_CHAR]
-            rendered = render_block_glyph(glyph, font.width, font.height, use_short_blocks)
+            rendered = render_block_glyph(glyph, font.width, font.height, tall_mode)
 
             # Ensure each character has exactly fig_height lines
             while len(rendered) < fig_height:
@@ -151,12 +151,12 @@ def write_flf_file(font: PSFFont, output_path: Path, use_short_blocks: bool = Tr
                     f.write(padded_line + "@@\n")
 
 
-def convert_psf_to_flf(font: PSFFont, name: str, output_dir: Path, use_short_blocks: bool = True) -> Path:
+def convert_psf_to_flf(font: PSFFont, name: str, output_dir: Path, tall_mode: bool = False) -> Path:
     height, width = font.height, font.width
-    fig_height, max_length, display_width = calculate_flf_dimensions(width, height, use_short_blocks)
+    fig_height, max_length, display_width = calculate_flf_dimensions(width, height, tall_mode)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / f"{name}-{display_width}x{height}.flf"
 
-    write_flf_file(font, path, use_short_blocks)
+    write_flf_file(font, path, tall_mode)
     return path
