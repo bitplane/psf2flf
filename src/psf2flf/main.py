@@ -1,97 +1,41 @@
 import argparse
 from pathlib import Path
-from .psf import load_psf_file
-from .psf2flf import convert_psf_to_flf
+
+from .readers.psf import PSFLoader
+from .writers.flf import FLFWriter
+from .utils import print_dict
 
 
 def show_info(source: Path):
-    font = load_psf_file(source)
-
+    font = PSFLoader(source).load()
     print(f"Font: {source}")
-    print(f"Format: PSF{font.version}")
-    print(f"Width: {font.width}")
-    print(f"Height: {font.height}")
-    print(f"Flags: 0x{font.flags:08x}")
-
-    # Decode PSF2 flags
-    if hasattr(font, "flags"):
-        flag_meanings = []
-        if font.flags & 0x01:
-            flag_meanings.append("HAS_UNICODE_TABLE")
-        if not flag_meanings:
-            flag_meanings.append("No flags set")
-        print(f"Flag meanings: {', '.join(flag_meanings)}")
-
-    print(f"Glyph count: {len(font.glyphs)}")
-
-    # Show header and data layout info for PSF2
-    print(f"Header size: {font.headersize}")
-    print(f"Glyph data start: {font.glyph_data_start}")
-    print(f"Glyph data length: {font.glyph_data_length}")
-    print(f"Unicode data start: {font.unicode_data_start}")
-    print(f"Unicode data length: {font.unicode_data_length}")
-
-    if font.glyphs:
-        bytes_per_glyph = len(font.glyphs[0])
-        print(f"Bytes per glyph: {bytes_per_glyph}")
-
-        # Calculate expected bytes for comparison
-        expected_bytes = (font.width * font.height + 7) // 8
-        print(f"Expected bytes (w*h/8): {expected_bytes}")
-
-        if bytes_per_glyph != expected_bytes:
-            ratio = bytes_per_glyph / expected_bytes
-            print(f"Ratio (actual/expected): {ratio:.2f}")
-
-            # Additional analysis for kbd-style fonts
-            if bytes_per_glyph < expected_bytes:
-                # Fewer bytes than expected - header width might be wrong
-                actual_width_bits = bytes_per_glyph * 8 // font.height
-                if actual_width_bits * font.height == bytes_per_glyph * 8:
-                    print(f"Likely actual width: {actual_width_bits} pixels")
-            elif bytes_per_glyph > expected_bytes:
-                # More bytes than expected - vpitch padding or multiple planes
-                if bytes_per_glyph % expected_bytes == 0:
-                    planes = bytes_per_glyph // expected_bytes
-                    print(f"Possible {planes} bitplanes detected")
-                else:
-                    # Check for vpitch-style padding
-                    rows_in_storage = bytes_per_glyph * 8 // font.width
-                    print(f"Storage rows: {rows_in_storage} (vs display height: {font.height})")
-                    if rows_in_storage > font.height:
-                        print(f"Possible vpitch padding: {rows_in_storage - font.height} extra rows")
-
-    if hasattr(font, "unicode_map") and font.unicode_map:
-        print(f"Unicode mapping entries: {len(font.unicode_map)}")
+    print_dict(font.meta)
+    print(f"codepoints: {len(font.glyphs)}")
 
 
 def convert_single(source: Path, dest: Path, tall_mode: bool = False):
-    font = load_psf_file(source)
+    font = PSFLoader(source).load()
 
-    # For single file conversion, dest is the output file
-    if dest.suffix == ".flf":
-        out_path = dest
-    else:
-        # If no .flf extension, add it
-        out_path = dest.with_suffix(".flf")
+    if dest.suffix != ".flf":
+        dest = dest.with_suffix(".flf")
 
-    # Create parent directory if needed
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    dest.parent.mkdir(parents=True, exist_ok=True)
 
-    # Convert with the specified output path
-    from .psf2flf import write_flf_file
-
-    write_flf_file(font, out_path, tall_mode)
-    print(f"{source}\t{out_path}")
+    writer = FLFWriter(font, tall_mode)
+    writer.write(dest)
+    print(f"{source}\t{dest}")
 
 
 def convert_all(source_dir: Path, dest_dir: Path, tall_mode: bool = False):
+    dest_dir.mkdir(parents=True, exist_ok=True)
     psf_files = list(source_dir.glob("*.psf")) + list(source_dir.glob("*.psf.gz"))
     for path in psf_files:
         try:
-            font = load_psf_file(path)
+            font = PSFLoader(path).load()
             name = path.stem.replace(".psf", "").replace(".gz", "")
-            out_path = convert_psf_to_flf(font, name, dest_dir, tall_mode)
+            out_path = dest_dir / f"{name}.flf"
+            writer = FLFWriter(font, tall_mode)
+            writer.write(out_path)
             print(f"{path}\t{out_path}")
         except Exception as e:
             print(f"{path}\tERROR: {e}")
