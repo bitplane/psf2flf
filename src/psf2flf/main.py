@@ -109,7 +109,7 @@ def main():
     parser.add_argument("dest", nargs="?", help="Output file (single) or directory (--all)")
     parser.add_argument("--all", action="store_true", help="Convert all PSF fonts in a directory")
     parser.add_argument("--info", action="store_true", help="Show font information instead of converting")
-    parser.add_argument("--short", action="store_true", help="Use 2x1 block compression for shorter output (default)")
+    parser.add_argument("--tall", action="store_true", help="Use full-size 1:1 pixel mapping instead of default 2x1 compression")
     args = parser.parse_args()
 
     if args.info:
@@ -119,11 +119,11 @@ def main():
     elif args.all:
         if not args.source or not args.dest:
             parser.error("You must provide source and dest directories when using --all.")
-        convert_all(Path(args.source), Path(args.dest), args.short)
+        convert_all(Path(args.source), Path(args.dest), not args.tall)
     else:
         if not args.source or not args.dest:
             parser.error("You must provide a source PSF file and dest file.")
-        convert_single(Path(args.source), Path(args.dest), args.short)
+        convert_single(Path(args.source), Path(args.dest), not args.tall)
 
 
 if __name__ == "__main__":
