@@ -1,6 +1,7 @@
 import gzip
 import struct
 import re
+import sys
 from pathlib import Path
 
 from ..font import Font
@@ -108,12 +109,14 @@ class PSFReader(Reader):
             raise PSFParseError("Unknown mode")
 
         glyphs = 512 if mode & 0b001 else 256
+        has_unicode_table = bool(mode & 0b010)
         width = 8
         char_size = height
         bytes_per_row = 1
 
         font.meta["psf1"] = {
             "mode": mode,
+            "has_unicode_table": has_unicode_table,
         }
         font.meta["width"] = width
         font.meta["height"] = height
@@ -122,8 +125,23 @@ class PSFReader(Reader):
 
         raw_glyphs = self._read_glyphs(4, glyphs, height, width, char_size, bytes_per_row)
 
+        unicode_map = {}
+        if has_unicode_table:
+            unicode_map = self._parse_unicode_table(4 + glyphs * char_size, glyphs, is_psf1=True)
+            total_mappings = sum(len(mappings) for mappings in unicode_map.values())
+            font.meta["unicode_glyphs"] = len(unicode_map)
+            font.meta["unicode_mappings"] = total_mappings
+
+        # Map glyphs to characters
         for i, glyph_data in enumerate(raw_glyphs):
-            font.glyphs[chr(i)] = glyph_data
+            if i in unicode_map:
+                for unicode_val in unicode_map[i]:
+                    font.glyphs[chr(unicode_val)] = glyph_data
+            else:
+                # Fallback for glyphs not in the unicode map
+                if i < 256:
+                    print(f"Warning: Glyph {i} (0x{i:02X}) has no Unicode mapping in {font.meta['file_name']}, using fallback chr({i})", file=sys.stderr)
+                    font.glyphs[chr(i)] = glyph_data
 
     def _parse_psf2(self, font: Font):
         font.meta["format"] = "psf2"
@@ -161,7 +179,10 @@ class PSFReader(Reader):
 
         unicode_map = {}
         if flags & 1:
-            unicode_map = self._parse_unicode_table(header_size + glyphs * char_size, len(raw_glyphs))
+            unicode_map = self._parse_unicode_table(header_size + glyphs * char_size, len(raw_glyphs), is_psf1=False)
+            total_mappings = sum(len(mappings) for mappings in unicode_map.values())
+            font.meta["unicode_glyphs"] = len(unicode_map)
+            font.meta["unicode_mappings"] = total_mappings
 
         # Map glyphs to characters
         for i, glyph_data in enumerate(raw_glyphs):
@@ -171,6 +192,7 @@ class PSFReader(Reader):
             else:
                 # Fallback for glyphs not in the unicode map
                 if i < 256:
+                    print(f"Warning: Glyph {i} (0x{i:02X}) has no Unicode mapping in {font.meta['file_name']}, using fallback chr({i})", file=sys.stderr)
                     font.glyphs[chr(i)] = glyph_data
 
     def _read_glyphs(
@@ -205,31 +227,67 @@ class PSFReader(Reader):
             all_glyphs.append(glyph_pixels)
         return all_glyphs
 
-    def _parse_unicode_table(self, offset: int, glyph_count: int) -> dict[int, list[int]]:
-        """Parse PSF2 unicode mapping table and return a dictionary."""
+    def _parse_unicode_table(self, offset: int, glyph_count: int, is_psf1: bool = False) -> dict[int, list[int]]:
+        """Parse PSF1/PSF2 unicode mapping table and return a dictionary."""
+        
         pos = offset
-        glyph_index = 0
         unicode_map = {}
-
-        while pos < len(self.data) and glyph_index < glyph_count:
-            unicode_list = []
-
-            while pos < len(self.data):
-                if pos + 1 < len(self.data):
-                    unicode_val = struct.unpack("<H", self.data[pos : pos + 2])[0]
+        
+        if is_psf1:
+            # PSF1: Each glyph's mapping ends with 0xFFFF (16-bit)
+            for glyph_idx in range(glyph_count):
+                unicode_list = []
+                
+                while pos + 1 < len(self.data):
+                    # Read 16-bit little-endian value
+                    val = self.data[pos] | (self.data[pos + 1] << 8)
                     pos += 2
-
-                    if unicode_val == 0xFFFF:
+                    
+                    if val == 0xFFFF:  # End of this glyph's mappings
                         break
-                    elif unicode_val == 0xFFFE:
+                    elif val == 0xFFFE:  # Sequence separator
+                        # In PSF1, sequences are separated by 0xFFFE
                         continue
                     else:
-                        unicode_list.append(unicode_val)
-                else:
-                    break
-
-            if unicode_list:
-                unicode_map[glyph_index] = unicode_list
-
-            glyph_index += 1
+                        unicode_list.append(val)
+                
+                if unicode_list:
+                    unicode_map[glyph_idx] = unicode_list
+                    
+        else:
+            # PSF2: UTF-8 encoded, each glyph's mapping ends with 0xFF
+            for glyph_idx in range(glyph_count):
+                unicode_list = []
+                sequence_bytes = []
+                
+                while pos < len(self.data):
+                    byte = self.data[pos]
+                    pos += 1
+                    
+                    if byte == 0xFF:  # End of this glyph's mappings
+                        # Process any remaining bytes
+                        if sequence_bytes:
+                            try:
+                                utf8_str = bytes(sequence_bytes).decode('utf-8')
+                                for char in utf8_str:
+                                    unicode_list.append(ord(char))
+                            except UnicodeDecodeError:
+                                pass
+                        break
+                    elif byte == 0xFE:  # Sequence separator
+                        # Process accumulated bytes before separator
+                        if sequence_bytes:
+                            try:
+                                utf8_str = bytes(sequence_bytes).decode('utf-8')
+                                for char in utf8_str:
+                                    unicode_list.append(ord(char))
+                            except UnicodeDecodeError:
+                                pass
+                            sequence_bytes = []
+                    else:
+                        sequence_bytes.append(byte)
+                
+                if unicode_list:
+                    unicode_map[glyph_idx] = unicode_list
+                    
         return unicode_map
