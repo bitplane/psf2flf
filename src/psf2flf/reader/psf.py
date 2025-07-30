@@ -16,15 +16,44 @@ _SIZE_PATTERN = re.compile(r"(\d+(?:x\d+)?)$")
 _BOLD_PATTERN = re.compile(r"Bold$")
 
 
-def _parse_psf_filename(filename: str) -> tuple[str, frozenset[str], int | None]:
+def _is_charset_prefix(first_part: str, remaining_parts: list[str]) -> bool:
     """
-    Parses a PSF filename to extract font name, style modifiers, and size.
+    Heuristic to determine if the first part of a filename is a charset/language prefix.
+
+    Returns True if:
+    - First part starts with uppercase
+    - Contains only letters and digits (common for Lat2, Uni1, etc.)
+    - There are remaining parts (i.e., not the entire filename)
+    """
+    if not first_part or not remaining_parts:
+        return False
+
+    # Must start with uppercase
+    if not first_part[0].isupper():
+        return False
+
+    # Allow alphanumeric (for Lat2, Uni1, etc.) and "Full" prefix
+    cleaned = first_part.replace("Full", "")
+
+    # Check if it's mostly alphabetic with optional digits at the end
+    # This catches Lat2, Lat15, Uni1, CyrAsia, etc.
+    for i, char in enumerate(cleaned):
+        if not char.isalpha() and not (i > 0 and char.isdigit()):
+            return False
+
+    return True
+
+
+def _parse_psf_filename(filename: str) -> tuple[str, frozenset[str], int | None, str | None]:
+    """
+    Parses a PSF filename to extract font name, style modifiers, size, and charset.
 
     Returns:
-        tuple[str, frozenset[str], int | None]:
+        tuple[str, frozenset[str], int | None, str | None]:
             - name: The core font name (e.g., "Terminus", "Fixed").
-            - styles: A frozenset of style modifiers (e.g., {"Arabic", "Bold", "14"}).
+            - styles: A frozenset of style modifiers (e.g., {"Bold", "14"}).
             - size: The primary height of the font (e.g., 14, 28), or None if not found.
+            - charset: The character set/language (e.g., "Arabic", "Uni1"), or None if not found.
     """
     stem = Path(filename).stem
     if stem.endswith(".psf"):
@@ -35,11 +64,16 @@ def _parse_psf_filename(filename: str) -> tuple[str, frozenset[str], int | None]
     name = stem  # Default
     styles = set()
     primary_size: int | None = None
+    charset: str | None = None
 
     if len(name_parts) > 1:
-        # Assume first part is language/script
-        styles.add(name_parts[0])
-        remaining_name = "-".join(name_parts[1:])
+        # First part might be language/charset
+        first_part = name_parts[0]
+        if _is_charset_prefix(first_part, name_parts[1:]):
+            charset = first_part
+            remaining_name = "-".join(name_parts[1:])
+        else:
+            remaining_name = stem
 
         # Try to extract size from the end
         size_match = _SIZE_PATTERN.search(remaining_name)
@@ -65,7 +99,7 @@ def _parse_psf_filename(filename: str) -> tuple[str, frozenset[str], int | None]
         # No hyphens, use full stem as name, no styles/size
         name = stem
 
-    return name, frozenset(styles), primary_size
+    return name, frozenset(styles), primary_size, charset
 
 
 class PSFReader(Reader):
@@ -85,11 +119,13 @@ class PSFReader(Reader):
         font = Font()
         font.meta["file_name"] = str(path)
 
-        name, styles, primary_size = _parse_psf_filename(path.name)
+        name, styles, primary_size, charset = _parse_psf_filename(path.name)
         font.meta["name"] = name
         font.meta["styles"] = styles
         if primary_size is not None:
             font.meta["primary_size"] = primary_size
+        if charset is not None:
+            font.meta["charset"] = charset
 
         if self.data[0:2] == b"\x36\x04":
             self._parse_psf1(font)
@@ -203,8 +239,8 @@ class PSFReader(Reader):
 
     def _read_glyphs(
         self, offset: int, glyph_count: int, height: int, width: int, char_size: int, bytes_per_row: int
-    ) -> list[list[list[bool]]]:
-        """Read glyphs and return as a list of pixel arrays."""
+    ) -> list[tuple[tuple[bool, ...], ...]]:
+        """Read glyphs and return as a list of pixel arrays (as tuples for hashability)."""
         data_pos = offset
         all_glyphs = []
 
@@ -228,9 +264,9 @@ class PSFReader(Reader):
                             row_pixels.append(pixel_on)
                             x += 1
 
-                glyph_pixels.append(row_pixels)
+                glyph_pixels.append(tuple(row_pixels))
 
-            all_glyphs.append(glyph_pixels)
+            all_glyphs.append(tuple(glyph_pixels))
         return all_glyphs
 
     def _parse_unicode_table(self, offset: int, glyph_count: int, is_psf1: bool = False) -> dict[int, list[int]]:
