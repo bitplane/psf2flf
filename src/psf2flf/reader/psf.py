@@ -1,5 +1,6 @@
 import gzip
 import struct
+import re
 from pathlib import Path
 
 from ..font import Font
@@ -8,6 +9,62 @@ from .reader import Reader
 
 class PSFParseError(Exception):
     pass
+
+
+_SIZE_PATTERN = re.compile(r"(\d+(?:x\d+)?)$")
+_BOLD_PATTERN = re.compile(r"Bold$")
+
+
+def _parse_psf_filename(filename: str) -> tuple[str, frozenset[str], int | None]:
+    """
+    Parses a PSF filename to extract font name, style modifiers, and size.
+
+    Returns:
+        tuple[str, frozenset[str], int | None]:
+            - name: The core font name (e.g., "Terminus", "Fixed").
+            - styles: A frozenset of style modifiers (e.g., {"Arabic", "Bold", "14"}).
+            - size: The primary height of the font (e.g., 14, 28), or None if not found.
+    """
+    stem = Path(filename).stem
+    if stem.endswith(".psf"):
+        stem = Path(stem).stem
+
+    name_parts = stem.split("-")
+
+    name = stem  # Default
+    styles = set()
+    primary_size: int | None = None
+
+    if len(name_parts) > 1:
+        # Assume first part is language/script
+        styles.add(name_parts[0])
+        remaining_name = "-".join(name_parts[1:])
+
+        # Try to extract size from the end
+        size_match = _SIZE_PATTERN.search(remaining_name)
+        if size_match:
+            size_str = size_match.group(1)
+            styles.add(size_str)
+            try:
+                primary_size = int(size_str.split("x")[0])
+            except ValueError:
+                pass
+            remaining_name = remaining_name[: size_match.start()]
+
+        # Try to extract Bold style
+        bold_match = _BOLD_PATTERN.search(remaining_name)
+        if bold_match:
+            styles.add("Bold")
+            remaining_name = remaining_name[: bold_match.start()]
+
+        # The rest is the family name
+        name = remaining_name.strip("-")  # Remove any trailing hyphens
+
+    else:
+        # No hyphens, use full stem as name, no styles/size
+        name = stem
+
+    return name, frozenset(styles), primary_size
 
 
 class PSFReader(Reader):
@@ -26,6 +83,12 @@ class PSFReader(Reader):
 
         font = Font()
         font.meta["file_name"] = str(path)
+
+        name, styles, primary_size = _parse_psf_filename(path.name)
+        font.meta["name"] = name
+        font.meta["styles"] = styles
+        if primary_size is not None:
+            font.meta["primary_size"] = primary_size
 
         if self.data[0:2] == b"\x36\x04":
             self._parse_psf1(font)
