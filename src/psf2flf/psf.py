@@ -13,12 +13,15 @@ class PSFFont:
         self.unicode_map: Dict[int, List[int]] = {}
         self.width: int = 8
         self.height: int = 0
+        self.version: int = 0
         self._parse(data)
 
     def _parse(self, data: bytes):
         if data[0:2] == b"\x36\x04":
+            self.version = 1
             self._parse_psf1(data)
         elif data[0:4] == b"\x72\xb5\x4a\x86":
+            self.version = 2
             self._parse_psf2(data)
         else:
             raise PSFParseError("Not a PSF file")

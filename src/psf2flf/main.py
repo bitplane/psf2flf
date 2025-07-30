@@ -7,14 +7,8 @@ from .psf2flf import convert_psf_to_flf
 def show_info(source: Path):
     font = load_psf_file(source)
 
-    # Determine PSF version from font properties
-    if hasattr(font, "flags") and font.width != 8:
-        psf_version = "PSF2"
-    else:
-        psf_version = "PSF1" if font.width == 8 else "PSF2"
-
     print(f"Font: {source}")
-    print(f"Format: {psf_version}")
+    print(f"Format: PSF{font.version}")
     print(f"Width: {font.width}")
     print(f"Height: {font.height}")
     print(f"Flags: 0x{font.flags:08x}")
@@ -109,7 +103,9 @@ def main():
     parser.add_argument("dest", nargs="?", help="Output file (single) or directory (--all)")
     parser.add_argument("--all", action="store_true", help="Convert all PSF fonts in a directory")
     parser.add_argument("--info", action="store_true", help="Show font information instead of converting")
-    parser.add_argument("--tall", action="store_true", help="Use full-size 1:1 pixel mapping instead of default 2x1 compression")
+    parser.add_argument(
+        "--tall", action="store_true", help="Use full-size 1:1 pixel mapping instead of default 2x1 compression"
+    )
     args = parser.parse_args()
 
     if args.info:
