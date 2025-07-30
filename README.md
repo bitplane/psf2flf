@@ -2,8 +2,9 @@
 
 Converts bitmap fonts to figlet fonts.
 
-
 ## todo
 
-- [ ] support
+- [x] support different readers and writers
+- [ ] combine fonts by typeface
+- [ ] unicode toilet font writer
 

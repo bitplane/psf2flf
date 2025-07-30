@@ -1,28 +1,27 @@
 import argparse
 from pathlib import Path
 
-from .readers.psf import PSFLoader
-from .writers.flf import FLFWriter
+from .reader import read
+from .writer import write
 from .utils import print_dict
 
 
 def show_info(source: Path):
-    font = PSFLoader(source).load()
+    font = read(source)
     print(f"Font: {source}")
     print_dict(font.meta)
     print(f"codepoints: {len(font.glyphs)}")
 
 
 def convert_single(source: Path, dest: Path, tall_mode: bool = False):
-    font = PSFLoader(source).load()
+    font = read(source)
 
     if dest.suffix != ".flf":
         dest = dest.with_suffix(".flf")
 
     dest.parent.mkdir(parents=True, exist_ok=True)
 
-    writer = FLFWriter(font, tall_mode)
-    writer.write(dest)
+    write(font, dest, tall_mode)
     print(f"{source}\t{dest}")
 
 
@@ -31,11 +30,10 @@ def convert_all(source_dir: Path, dest_dir: Path, tall_mode: bool = False):
     psf_files = list(source_dir.glob("*.psf")) + list(source_dir.glob("*.psf.gz"))
     for path in psf_files:
         try:
-            font = PSFLoader(path).load()
+            font = read(path)
             name = path.stem.replace(".psf", "").replace(".gz", "")
             out_path = dest_dir / f"{name}.flf"
-            writer = FLFWriter(font, tall_mode)
-            writer.write(out_path)
+            write(font, out_path, tall_mode)
             print(f"{path}\t{out_path}")
         except Exception as e:
             print(f"{path}\tERROR: {e}")

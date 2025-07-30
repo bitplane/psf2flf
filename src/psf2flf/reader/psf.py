@@ -3,21 +3,29 @@ import struct
 from pathlib import Path
 
 from ..font import Font
+from .reader import Reader
 
 
 class PSFParseError(Exception):
     pass
 
 
-class PSFLoader:
-    def __init__(self, path: Path):
-        self.path = path
+class PSFReader(Reader):
+    @staticmethod
+    def can_open(path: Path) -> bool:
+        try:
+            with gzip.open(path, "rb") if str(path).endswith(".gz") else open(path, "rb") as f:
+                magic = f.read(4)
+            return magic[0:2] == b"\x36\x04" or magic[0:4] == b"\x72\xb5\x4a\x86"
+        except Exception:
+            return False
+
+    def read(self, path: Path) -> Font:
         with gzip.open(path, "rb") if str(path).endswith(".gz") else open(path, "rb") as f:
             self.data = f.read()
 
-    def load(self) -> Font:
         font = Font()
-        font.meta["file_name"] = str(self.path)
+        font.meta["file_name"] = str(path)
 
         if self.data[0:2] == b"\x36\x04":
             self._parse_psf1(font)

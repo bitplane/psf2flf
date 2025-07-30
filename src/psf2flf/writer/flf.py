@@ -1,20 +1,21 @@
 from pathlib import Path
 
 from ..font import Font
+from .writer import Writer
 
 GLYPHS = [chr(i) for i in range(32, 127)]
 DEFAULT_CHAR = "?"
 
 
-class FLFWriter:
-    def __init__(self, font: Font, tall_mode: bool = False):
-        self.font = font
-        self.tall_mode = tall_mode
+class FLFWriter(Writer):
+    @staticmethod
+    def can_write(path: Path) -> bool:
+        return path.suffix == ".flf"
 
-    def write(self, output_path: Path):
-        height = self.font.meta["height"]
-        width = self.font.meta["width"]
-        fig_height, max_length, _ = self._calculate_flf_dimensions(width, height, self.tall_mode)
+    def write(self, font: Font, output_path: Path, tall_mode: bool = False):
+        height = font.meta["height"]
+        width = font.meta["width"]
+        fig_height, max_length, _ = self._calculate_flf_dimensions(width, height, tall_mode)
 
         hardblank = "$"
         layout = 0
@@ -22,8 +23,8 @@ class FLFWriter:
         with output_path.open("w", encoding="utf-8") as f:
             f.write(f"flf2a{hardblank} {fig_height} {fig_height - 1} {max_length} 0 {layout} 0 0 {len(GLYPHS)}\n")
             for ch in GLYPHS:
-                glyph = self.font.glyphs.get(ch, self.font.glyphs[DEFAULT_CHAR])
-                rendered = self._render_block_glyph(glyph, width, height, self.tall_mode)
+                glyph = font.glyphs.get(ch, font.glyphs[DEFAULT_CHAR])
+                rendered = self._render_block_glyph(glyph, width, height, tall_mode)
 
                 while len(rendered) < fig_height:
                     rendered.append("")
