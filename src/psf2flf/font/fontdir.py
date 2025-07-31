@@ -59,14 +59,27 @@ class FontDir:
         for family_name, typeface in self.typefaces.items():
             for style_group in typeface.styles.values():
                 for size, font in style_group.items():
-                    # Generate filename: Family-Style-Size.flf
+                    # Generate filename: FamilyStyleHxW.flf with correct output dimensions
                     style_parts = list(font.style) if font.style else []
-                    size_part = str(size)
+                    # Filter out size information from styles (already have dimensions)
+                    style_parts = [s for s in style_parts if not any(char.isdigit() for char in s)]
 
-                    if style_parts:
-                        filename = f"{family_name}-{'-'.join(style_parts)}-{size_part}.flf"
+                    # Calculate actual output dimensions
+                    if tall_mode:
+                        # Tall mode: 1:1 pixel mapping (narrow chars since pixels are square)
+                        output_height = font.height
+                        output_width = font.width
+                        if "Narrow" not in style_parts:
+                            style_parts.append("Narrow")
                     else:
-                        filename = f"{family_name}-{size_part}.flf"
+                        # Default mode: 2:1 compression
+                        output_height = (font.height + 1) // 2  # Round up for odd heights
+                        output_width = font.width
+
+                    style_suffix = "".join(style_parts) if style_parts else ""
+                    dimensions = f"{output_height}x{output_width}"
+
+                    filename = f"{family_name}{style_suffix}{dimensions}.flf"
 
                     output_path = output_dir / filename
                     write(font, output_path, tall_mode)
@@ -84,14 +97,27 @@ class FontDir:
                 for family_name, typeface in self.typefaces.items():
                     for style_group in typeface.styles.values():
                         for size, font in style_group.items():
-                            # Generate filename: Family-Style-Size.flf
+                            # Generate filename: FamilyStyleHxW.flf with correct output dimensions
                             style_parts = list(font.style) if font.style else []
-                            size_part = str(size)
+                            # Filter out size information from styles (already have dimensions)
+                            style_parts = [s for s in style_parts if not any(char.isdigit() for char in s)]
 
-                            if style_parts:
-                                filename = f"{family_name}-{'-'.join(style_parts)}-{size_part}.flf"
+                            # Calculate actual output dimensions
+                            if tall_mode:
+                                # Tall mode: 1:1 pixel mapping (narrow chars since pixels are square)
+                                output_height = font.height
+                                output_width = font.width
+                                if "Narrow" not in style_parts:
+                                    style_parts.append("Narrow")
                             else:
-                                filename = f"{family_name}-{size_part}.flf"
+                                # Default mode: 2:1 compression
+                                output_height = (font.height + 1) // 2  # Round up for odd heights
+                                output_width = font.width
+
+                            style_suffix = "".join(style_parts) if style_parts else ""
+                            dimensions = f"{output_height}x{output_width}"
+
+                            filename = f"{family_name}{style_suffix}{dimensions}.flf"
 
                             temp_file = temp_path / filename
                             write(font, temp_file, tall_mode)

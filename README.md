@@ -1,10 +1,4 @@
-# ✍️ psf2flf
+# 🔠 psf2flf
 
-Converts bitmap fonts to figlet fonts.
-
-## todo
-
-- [x] support different readers and writers
-- [ ] combine fonts by typeface
-- [ ] unicode toilet font writer
-
+Converts PSF bitmap fonts to Figlet fonts, combining multiple charsets into a
+unicode representation.
