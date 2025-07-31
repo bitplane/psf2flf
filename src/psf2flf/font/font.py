@@ -54,3 +54,43 @@ class Font:
                 return False
 
         return True
+
+    def __iadd__(self, other):
+        """Merge another font into this one if they are compatible."""
+        if not isinstance(other, Font):
+            raise TypeError(f"Cannot add {type(other).__name__} to Font")
+
+        # Check compatibility using existing __eq__ logic
+        if (
+            self.name != other.name
+            or self.style != other.style
+            or self.width != other.width
+            or self.height != other.height
+        ):
+            raise ValueError(
+                f"Cannot merge incompatible fonts: "
+                f"{self.name} {self.style} {self.width}x{self.height} != "
+                f"{other.name} {other.style} {other.width}x{other.height}"
+            )
+
+        # Check that overlapping glyphs are identical
+        common_chars = set(self.glyphs.keys()) & set(other.glyphs.keys())
+        for char in common_chars:
+            if self.glyphs[char] != other.glyphs[char]:
+                raise ValueError(f"Cannot merge fonts: conflicting glyph for character '{char}' " f"(ord {ord(char)})")
+
+        # Merge glyphs from other font
+        for char, glyph in other.glyphs.items():
+            if char not in self.glyphs:
+                self.glyphs[char] = glyph
+
+        # Merge metadata (keep existing, but add missing charset info)
+        if "charset" not in self.meta and "charset" in other.meta:
+            self.meta["charset"] = other.meta["charset"]
+        elif "charset" in self.meta and "charset" in other.meta:
+            # If both have charset and they differ, combine them
+            if self.meta["charset"] != other.meta["charset"]:
+                charsets = {self.meta["charset"], other.meta["charset"]}
+                self.meta["charset"] = "+".join(sorted(charsets))
+
+        return self

@@ -1,5 +1,5 @@
 #!/bin/sh
-psf2flf --all /usr/share/consolefonts fonts/console
+psf2flf /usr/share/consolefonts/*.psf.gz fonts/console/
 
 WIDTH=$(tput cols)
 
