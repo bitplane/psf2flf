@@ -35,7 +35,7 @@ def is_directory_output(path: Path) -> bool:
     return False
 
 
-def convert_multiple(inputs: list[Path], output: Path, tall_mode: bool = False):
+def convert_multiple(inputs: list[Path], output: Path, tall_mode: bool = False, force: bool = False):
     """Convert multiple input files to single output (font or directory)."""
     if is_directory_output(output):
         # Output is a directory or tar file - use FontDir
@@ -81,8 +81,12 @@ def convert_multiple(inputs: list[Path], output: Path, tall_mode: bool = False):
                     merged_font = font
                     print(f"Base font: {input_path}")
                 else:
-                    merged_font += font
-                    print(f"Merged: {input_path}")
+                    if force:
+                        merged_font.force_merge(font)
+                        print(f"Force merged: {input_path}")
+                    else:
+                        merged_font += font
+                        print(f"Merged: {input_path}")
             except Exception as e:
                 print(f"ERROR processing {input_path}: {e}", file=sys.stderr)
                 return 1
@@ -141,6 +145,7 @@ Examples:
     parser.add_argument(
         "--tall", action="store_true", help="Use full-size 1:1 pixel mapping instead of default 2x1 compression"
     )
+    parser.add_argument("--force", action="store_true", help="Force merge incompatible fonts by ignoring conflicts")
 
     args = parser.parse_args(argv)
 
@@ -164,7 +169,7 @@ Examples:
         inputs = [Path(f) for f in args.files[:-1]]
         output = Path(args.files[-1])
 
-        return convert_multiple(inputs, output, args.tall)
+        return convert_multiple(inputs, output, args.tall, args.force)
 
 
 def main():

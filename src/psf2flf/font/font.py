@@ -73,16 +73,35 @@ class Font:
                 f"{other.name} {other.style} {other.width}x{other.height}"
             )
 
-        # Check that overlapping glyphs are identical
-        common_chars = set(self.glyphs.keys()) & set(other.glyphs.keys())
-        for char in common_chars:
-            if self.glyphs[char] != other.glyphs[char]:
-                raise ValueError(f"Cannot merge fonts: conflicting glyph for character '{char}' " f"(ord {ord(char)})")
-
-        # Merge glyphs from other font
+        # Only add glyphs that don't exist in current font (fill gaps only)
+        added_count = 0
         for char, glyph in other.glyphs.items():
             if char not in self.glyphs:
                 self.glyphs[char] = glyph
+                added_count += 1
+
+        # Merge metadata (keep existing, but add missing charset info)
+        if "charset" not in self.meta and "charset" in other.meta:
+            self.meta["charset"] = other.meta["charset"]
+        elif "charset" in self.meta and "charset" in other.meta:
+            # If both have charset and they differ, combine them
+            if self.meta["charset"] != other.meta["charset"]:
+                charsets = {self.meta["charset"], other.meta["charset"]}
+                self.meta["charset"] = "+".join(sorted(charsets))
+
+        return self
+
+    def force_merge(self, other):
+        """Force merge another font, ignoring compatibility checks."""
+        if not isinstance(other, Font):
+            raise TypeError(f"Cannot add {type(other).__name__} to Font")
+
+        # Only add glyphs that don't exist in current font (fill gaps only)
+        added_count = 0
+        for char, glyph in other.glyphs.items():
+            if char not in self.glyphs:
+                self.glyphs[char] = glyph
+                added_count += 1
 
         # Merge metadata (keep existing, but add missing charset info)
         if "charset" not in self.meta and "charset" in other.meta:

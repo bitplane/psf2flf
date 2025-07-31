@@ -61,17 +61,21 @@ class TestFontMerging:
             font1 += font2
 
     def test_font_merge_conflicting_glyphs(self):
-        """Test that merging fonts with conflicting glyphs fails."""
+        """Test that merging fonts with conflicting glyphs skips conflicts (gap-fill only)."""
         font1 = Font()
         font1.meta = {"name": "Test", "styles": frozenset({"Bold"}), "width": 8, "height": 16}
         font1.glyphs = {chr(65): ((True, False), (False, True))}
 
         font2 = Font()
         font2.meta = {"name": "Test", "styles": frozenset({"Bold"}), "width": 8, "height": 16}
-        font2.glyphs = {chr(65): ((False, True), (True, False))}
+        font2.glyphs = {chr(65): ((False, True), (True, False)), chr(66): ((True, True), (False, False))}
 
-        with pytest.raises(ValueError, match="Cannot merge fonts: conflicting glyph"):
-            font1 += font2
+        font1 += font2
+
+        # Should keep original glyph for A and add new glyph for B
+        assert len(font1.glyphs) == 2
+        assert font1.glyphs[chr(65)] == ((True, False), (False, True))  # Original kept
+        assert font1.glyphs[chr(66)] == ((True, True), (False, False))  # New added
 
 
 class TestTypeFace:
