@@ -46,7 +46,7 @@ class FLFWriter(Writer):
         with output_path.open("w", encoding="utf-8") as f:
             # Write FLF header with the correct number of characters
             f.write(
-                f"flf2a{hardblank} {fig_height} {fig_height - 1} {max_length} 0 {layout} 0 0 {total_chars_to_write}\n"
+                f"flf2a{hardblank} {fig_height} {fig_height - 1} {max_length} -1 {layout} 0 1 {total_chars_to_write}\n"
             )
 
             # Write ASCII glyphs (32-126) - no 0x prefix
@@ -72,11 +72,11 @@ class FLFWriter(Writer):
     def _calculate_flf_dimensions(self, font_width: int, font_height: int, tall_mode: bool):
         if tall_mode:
             fig_height = font_height
-            max_length = font_width
+            max_length = font_width + 1
             display_width = font_width
         else:
             fig_height = (font_height + 1) // 2
-            max_length = font_width
+            max_length = font_width + 1
             display_width = font_width
 
         return fig_height, max_length, display_width
