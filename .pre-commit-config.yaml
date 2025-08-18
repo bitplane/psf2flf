@@ -9,6 +9,7 @@ repos:
     - id: check-shebang-scripts-are-executable
     - id: mixed-line-ending
     - id: trailing-whitespace
+      exclude: ^tests/data/txt/
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: v0.5.0
