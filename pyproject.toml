@@ -21,7 +21,8 @@ dev = [
     "build",
     "twine",
     "ruff",
-    "pyfiglet"
+    "pyfiglet",
+    "pydoc-markdown"
 ]
 
 [project.scripts]
