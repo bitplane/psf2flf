@@ -279,6 +279,7 @@ class PSFReader(Reader):
             # PSF1: Each glyph's mapping ends with 0xFFFF (16-bit)
             for glyph_idx in range(glyph_count):
                 unicode_list = []
+                in_sequences = False
 
                 while pos + 1 < len(self.data):
                     # Read 16-bit little-endian value
@@ -287,10 +288,9 @@ class PSFReader(Reader):
 
                     if val == 0xFFFF:  # End of this glyph's mappings
                         break
-                    elif val == 0xFFFE:  # Sequence separator
-                        # In PSF1, sequences are separated by 0xFFFE
-                        continue
-                    else:
+                    elif val == 0xFFFE:  # Start of a multi-codepoint sequence
+                        in_sequences = True
+                    elif not in_sequences:
                         unicode_list.append(val)
 
                 if unicode_list:
@@ -301,14 +301,16 @@ class PSFReader(Reader):
             for glyph_idx in range(glyph_count):
                 unicode_list = []
                 sequence_bytes = []
+                in_sequences = False
 
                 while pos < len(self.data):
                     byte = self.data[pos]
                     pos += 1
 
                     if byte == 0xFF:  # End of this glyph's mappings
-                        # Process any remaining bytes
-                        if sequence_bytes:
+                        # Only standalone Unicode values can be represented by
+                        # the Font mapping. PSF sequences have no single key.
+                        if sequence_bytes and not in_sequences:
                             try:
                                 utf8_str = bytes(sequence_bytes).decode("utf-8")
                                 for char in utf8_str:
@@ -316,17 +318,17 @@ class PSFReader(Reader):
                             except UnicodeDecodeError:
                                 pass
                         break
-                    elif byte == 0xFE:  # Sequence separator
-                        # Process accumulated bytes before separator
-                        if sequence_bytes:
+                    elif byte == 0xFE:  # Start of a multi-codepoint sequence
+                        if sequence_bytes and not in_sequences:
                             try:
                                 utf8_str = bytes(sequence_bytes).decode("utf-8")
                                 for char in utf8_str:
                                     unicode_list.append(ord(char))
                             except UnicodeDecodeError:
                                 pass
-                            sequence_bytes = []
-                    else:
+                        sequence_bytes = []
+                        in_sequences = True
+                    elif not in_sequences:
                         sequence_bytes.append(byte)
 
                 if unicode_list:
