@@ -40,14 +40,12 @@ class FLFWriter(Writer):
         # Sort extended glyphs by codepoint
         sorted_extended_codepoints = sorted(extended_glyphs.keys())
 
-        # Total number of characters to write
-        total_chars_to_write = len(ascii_glyphs) + len(sorted_extended_codepoints)
+        # ASCII glyphs are required records; only extended glyphs have code tags.
+        code_tag_count = len(sorted_extended_codepoints)
 
         with output_path.open("w", encoding="utf-8") as f:
             # Write FLF header with the correct number of characters
-            f.write(
-                f"flf2a{hardblank} {fig_height} {fig_height - 1} {max_length} -1 {layout} 0 1 {total_chars_to_write}\n"
-            )
+            f.write(f"flf2a{hardblank} {fig_height} {fig_height - 1} {max_length} -1 {layout} 0 1 {code_tag_count}\n")
 
             # Write ASCII glyphs (32-126) - no 0x prefix
             for glyph_data in ascii_glyphs:
