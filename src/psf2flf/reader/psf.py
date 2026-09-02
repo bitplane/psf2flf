@@ -137,18 +137,25 @@ class PSFReader(Reader):
         return font
 
     def _parse_psf1(self, font: Font):
+        if len(self.data) < 4:
+            raise PSFParseError("Truncated PSF1 header")
+
         font.meta["format"] = "psf1"
         mode = self.data[2]
         height = self.data[3]
 
-        if mode > 0x111:
+        if mode > 0x05:
             raise PSFParseError("Unknown mode")
+        if height == 0:
+            raise PSFParseError("Invalid zero glyph height")
 
         glyphs = 512 if mode & 0b001 else 256
         has_unicode_table = bool(mode & 0b010)
         width = 8
         char_size = height
         bytes_per_row = 1
+
+        self._validate_bitmap_size(4, glyphs, char_size)
 
         font.meta["psf1"] = {
             "mode": mode,
@@ -183,6 +190,9 @@ class PSFReader(Reader):
                     font.glyphs[chr(i)] = glyph_data
 
     def _parse_psf2(self, font: Font):
+        if len(self.data) < 32:
+            raise PSFParseError("Truncated PSF2 header")
+
         font.meta["format"] = "psf2"
         header = struct.unpack("<7I", self.data[4:32])  # Skip magic, read 7 values
         (
@@ -199,10 +209,14 @@ class PSFReader(Reader):
             raise PSFParseError("Unknown sub-version")
         if header_size != 32:
             raise PSFParseError("Unknown header size")
+        if glyphs == 0 or height == 0 or width == 0:
+            raise PSFParseError("Invalid zero PSF2 dimension")
 
         bytes_per_row = (width + 7) // 8
         if char_size != height * bytes_per_row:
             raise PSFParseError("Mismatch in char byte size")
+
+        self._validate_bitmap_size(header_size, glyphs, char_size)
 
         font.meta["psf2"] = {
             "version": version,
@@ -268,6 +282,13 @@ class PSFReader(Reader):
 
             all_glyphs.append(tuple(glyph_pixels))
         return all_glyphs
+
+    def _validate_bitmap_size(self, offset: int, glyph_count: int, char_size: int):
+        expected_end = offset + glyph_count * char_size
+        if expected_end > len(self.data):
+            available = max(0, len(self.data) - offset)
+            expected = glyph_count * char_size
+            raise PSFParseError(f"Truncated bitmap data: expected {expected} bytes, found {available}")
 
     def _parse_unicode_table(self, offset: int, glyph_count: int, is_psf1: bool = False) -> dict[int, list[int]]:
         """Parse PSF1/PSF2 unicode mapping table and return a dictionary."""
