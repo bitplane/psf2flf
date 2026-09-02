@@ -40,12 +40,14 @@ def convert_multiple(inputs: list[Path], output: Path, tall_mode: bool = False, 
     if is_directory_output(output):
         # Output is a directory or tar file - use FontDir
         container = FontDir()
+        had_errors = False
 
         # Add all input fonts to the directory
         for input_path in inputs:
             try:
                 if not input_path.exists():
                     print(f"ERROR: File not found: {input_path}", file=sys.stderr)
+                    had_errors = True
                     continue
 
                 font = read(input_path)
@@ -53,15 +55,23 @@ def convert_multiple(inputs: list[Path], output: Path, tall_mode: bool = False, 
                 print(f"Added: {input_path}")
             except Exception as e:
                 print(f"ERROR reading {input_path}: {e}", file=sys.stderr)
+                had_errors = True
 
         # Write the directory
-        if output.suffix == ".tar":
-            container.write_tar(output, tall_mode)
-        else:
-            # Ensure output path ends with / for directory
-            if not str(output).endswith("/"):
-                output = Path(str(output) + "/")
-            container.write_directory(output, tall_mode)
+        try:
+            if output.suffix == ".tar":
+                container.write_tar(output, tall_mode)
+            else:
+                # Ensure output path ends with / for directory
+                if not str(output).endswith("/"):
+                    output = Path(str(output) + "/")
+                container.write_directory(output, tall_mode)
+        except Exception as e:
+            print(f"ERROR writing output {output}: {e}", file=sys.stderr)
+            return 1
+
+        if had_errors:
+            return 1
 
     else:
         # Output is a single .flf file - merge into single Font
@@ -106,10 +116,15 @@ def convert_multiple(inputs: list[Path], output: Path, tall_mode: bool = False, 
     return 0
 
 
-def convert_all_in_directory(source_dir: Path, dest_dir: Path, tall_mode: bool = False):
+def convert_all_in_directory(source_dir: Path, dest_dir: Path, tall_mode: bool = False) -> int:
     """Convert all PSF fonts in a directory (legacy --all mode)."""
+    if not source_dir.is_dir():
+        print(f"ERROR: Input directory not found: {source_dir}", file=sys.stderr)
+        return 1
+
     dest_dir.mkdir(parents=True, exist_ok=True)
     psf_files = list(source_dir.glob("*.psf")) + list(source_dir.glob("*.psf.gz"))
+    had_errors = False
 
     for path in psf_files:
         try:
@@ -119,7 +134,10 @@ def convert_all_in_directory(source_dir: Path, dest_dir: Path, tall_mode: bool =
             write(font, out_path, tall_mode)
             print(f"{path}\t{out_path}")
         except Exception as e:
-            print(f"{path}\tERROR: {e}")
+            print(f"{path}\tERROR: {e}", file=sys.stderr)
+            had_errors = True
+
+    return 1 if had_errors else 0
 
 
 def cli(argv):
@@ -158,8 +176,7 @@ Examples:
     elif args.all:
         if len(args.files) != 2:
             parser.error("--all requires exactly two arguments: input_dir output_dir.")
-        convert_all_in_directory(Path(args.files[0]), Path(args.files[1]), args.tall)
-        return 0
+        return convert_all_in_directory(Path(args.files[0]), Path(args.files[1]), args.tall)
 
     else:
         # New multi-input mode
