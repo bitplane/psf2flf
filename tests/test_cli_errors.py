@@ -29,3 +29,22 @@ def test_explicit_directory_with_suffix(tmp_path, name):
     assert output.is_dir()
     assert list(output.glob("*.flf"))
     assert not (tmp_path / "fonts.flf").exists()
+
+
+@pytest.mark.parametrize("content", [None, b"not a font", b"\x36\x04\x00\x01"])
+def test_info_reports_input_errors(tmp_path, capsys, content):
+    source = tmp_path / "font.psf"
+    if content is not None:
+        source.write_bytes(content)
+    assert cli(["--info", str(source)]) == 1
+    assert "ERROR reading" in capsys.readouterr().err
+
+
+def test_all_reports_destination_creation_errors(tmp_path, capsys):
+    source = tmp_path / "input"
+    source.mkdir()
+    output = tmp_path / "output"
+    output.write_text("existing file")
+    assert cli(["--all", str(source), str(output)]) == 1
+    assert "ERROR creating output directory" in capsys.readouterr().err
+    assert output.read_text() == "existing file"

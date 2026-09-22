@@ -4,6 +4,7 @@ from pathlib import Path
 
 from .font import FontDir
 from .reader import read
+from .reader.psf import PSFParseError
 from .writer import write
 from .utils import print_dict
 
@@ -127,7 +128,11 @@ def convert_all_in_directory(source_dir: Path, dest_dir: Path, tall_mode: bool =
         print(f"ERROR: Input directory not found: {source_dir}", file=sys.stderr)
         return 1
 
-    dest_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        print(f"ERROR creating output directory {dest_dir}: {error}", file=sys.stderr)
+        return 1
     psf_files = list(source_dir.glob("*.psf")) + list(source_dir.glob("*.psf.gz"))
     had_errors = False
 
@@ -177,7 +182,11 @@ Examples:
     if args.info:
         if len(args.files) != 1:
             parser.error("--info requires exactly one input file.")
-        show_info(Path(args.files[0]))
+        try:
+            show_info(Path(args.files[0]))
+        except (OSError, ValueError, PSFParseError, EOFError) as error:
+            print(f"ERROR reading {args.files[0]}: {error}", file=sys.stderr)
+            return 1
         return 0
 
     elif args.all:
