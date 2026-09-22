@@ -20,9 +20,11 @@ class FLFWriter(Writer):
         # Get the default glyph for fallback
         default_glyph_data = font.glyphs.get("?")
 
-        # Prepare ASCII glyphs (32-126)
+        required_codepoints = list(range(32, 127)) + list(map(ord, "ÄÖÜäöüß"))
+
+        # Prepare the 102 required, untagged glyphs
         ascii_glyphs = []
-        for i in range(32, 127):
+        for i in required_codepoints:
             char = chr(i)
             glyph = font.glyphs.get(char, default_glyph_data)
             if glyph is None:
@@ -34,20 +36,20 @@ class FLFWriter(Writer):
         extended_glyphs = {}
         for char, glyph_data in font.glyphs.items():
             cp = ord(char)
-            if not (32 <= cp <= 126):
+            if cp not in required_codepoints:
                 extended_glyphs[cp] = glyph_data
 
         # Sort extended glyphs by codepoint
         sorted_extended_codepoints = sorted(extended_glyphs.keys())
 
-        # ASCII glyphs are required records; only extended glyphs have code tags.
+        # The 102 required glyphs are untagged; only extended glyphs have code tags.
         code_tag_count = len(sorted_extended_codepoints)
 
         with output_path.open("w", encoding="utf-8") as f:
             # Write FLF header with the correct number of characters
             f.write(f"flf2a{hardblank} {fig_height} {fig_height - 1} {max_length} -1 {layout} 0 1 {code_tag_count}\n")
 
-            # Write ASCII glyphs (32-126) - no 0x prefix
+            # Write required glyphs without code tags
             for glyph_data in ascii_glyphs:
                 rendered = self._render_block_glyph(glyph_data, width, height, tall_mode)
                 for i, line in enumerate(rendered):
