@@ -207,8 +207,8 @@ class PSFReader(Reader):
 
         if version != 0:
             raise PSFParseError("Unknown sub-version")
-        if header_size != 32:
-            raise PSFParseError("Unknown header size")
+        if header_size < 32 or header_size > len(self.data):
+            raise PSFParseError("Invalid PSF2 header size")
         if glyphs == 0 or height == 0 or width == 0:
             raise PSFParseError("Invalid zero PSF2 dimension")
 

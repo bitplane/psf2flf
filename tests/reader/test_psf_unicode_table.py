@@ -93,3 +93,19 @@ def test_unicode_table_requires_an_entry_for_every_glyph(psf1):
     reader.data = b"\xff\xff" if psf1 else b"\xff"
     with pytest.raises(PSFParseError, match="Truncated"):
         reader._parse_unicode_table(0, 2, is_psf1=psf1)
+
+
+def test_extended_psf2_header_uses_bitmap_offset(tmp_path):
+    path = tmp_path / "extended.psf"
+    header = b"\x72\xb5\x4a\x86" + struct.pack("<7I", 0, 36, 1, 1, 1, 1, 1)
+    path.write_bytes(header + bytes(4) + b"\x80A\xff")
+    assert PSFReader().read(path).glyphs == {"A": ((True,),)}
+
+
+@pytest.mark.parametrize("size", [0, 31, 100])
+def test_invalid_psf2_bitmap_offsets_are_rejected(tmp_path, size):
+    path = tmp_path / "invalid.psf"
+    header = b"\x72\xb5\x4a\x86" + struct.pack("<7I", 0, size, 1, 1, 1, 1, 1)
+    path.write_bytes(header + b"\x80A\xff")
+    with pytest.raises(PSFParseError, match="header size"):
+        PSFReader().read(path)
