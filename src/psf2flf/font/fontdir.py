@@ -50,79 +50,45 @@ class FontDir:
 
         return self
 
-    def write_directory(self, output_dir: Path, tall_mode: bool = False):
-        """Write all typefaces to a directory structure."""
-        from ..writer import write  # Import here to avoid circular imports
-
-        output_dir.mkdir(parents=True, exist_ok=True)
-
+    def _output_fonts(self, tall_mode: bool) -> dict[str, Font]:
+        """Plan unique output names before opening any destination."""
+        outputs = {}
         for family_name, typeface in self.typefaces.items():
             for style_group in typeface.styles.values():
-                for size, font in style_group.items():
-                    # Generate filename: FamilyStyleHxW.flf with correct output dimensions
-                    style_parts = list(font.style) if font.style else []
-                    # Filter out size information from styles (already have dimensions)
-                    style_parts = [s for s in style_parts if not any(char.isdigit() for char in s)]
+                for font in style_group.values():
+                    styles = sorted(s for s in font.style if not any(c.isdigit() for c in s))
+                    if tall_mode and "Narrow" not in styles:
+                        styles.append("Narrow")
+                    height = font.height if tall_mode else (font.height + 1) // 2
+                    # Odd and even source heights can have the same compressed height.
+                    source = f"-source{font.height}" if not tall_mode and font.height % 2 else ""
+                    filename = f"{family_name}{''.join(styles)}{height}x{font.width}{source}.flf"
+                    if filename in outputs:
+                        raise ValueError(f"Duplicate output filename: {filename}")
+                    outputs[filename] = font
+        return outputs
 
-                    # Calculate actual output dimensions
-                    if tall_mode:
-                        # Tall mode: 1:1 pixel mapping (narrow chars since pixels are square)
-                        output_height = font.height
-                        output_width = font.width
-                        if "Narrow" not in style_parts:
-                            style_parts.append("Narrow")
-                    else:
-                        # Default mode: 2:1 compression
-                        output_height = (font.height + 1) // 2  # Round up for odd heights
-                        output_width = font.width
+    def write_directory(self, output_dir: Path, tall_mode: bool = False):
+        """Write all typefaces to a directory structure."""
+        from ..writer import write
 
-                    style_suffix = "".join(style_parts) if style_parts else ""
-                    dimensions = f"{output_height}x{output_width}"
-
-                    filename = f"{family_name}{style_suffix}{dimensions}.flf"
-
-                    output_path = output_dir / filename
-                    write(font, output_path, tall_mode)
-                    print(f"Written: {output_path}")
+        outputs = self._output_fonts(tall_mode)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for filename, font in outputs.items():
+            output_path = output_dir / filename
+            write(font, output_path, tall_mode)
+            print(f"Written: {output_path}")
 
     def write_tar(self, output_path: Path, tall_mode: bool = False):
         """Write all typefaces to a tar archive."""
-        from ..writer import write  # Import here to avoid circular imports
         import tempfile
+        from ..writer import write
 
+        outputs = self._output_fonts(tall_mode)
         with tarfile.open(output_path, "w:gz") as tar:
             with tempfile.TemporaryDirectory() as temp_dir:
-                temp_path = Path(temp_dir)
-
-                for family_name, typeface in self.typefaces.items():
-                    for style_group in typeface.styles.values():
-                        for size, font in style_group.items():
-                            # Generate filename: FamilyStyleHxW.flf with correct output dimensions
-                            style_parts = list(font.style) if font.style else []
-                            # Filter out size information from styles (already have dimensions)
-                            style_parts = [s for s in style_parts if not any(char.isdigit() for char in s)]
-
-                            # Calculate actual output dimensions
-                            if tall_mode:
-                                # Tall mode: 1:1 pixel mapping (narrow chars since pixels are square)
-                                output_height = font.height
-                                output_width = font.width
-                                if "Narrow" not in style_parts:
-                                    style_parts.append("Narrow")
-                            else:
-                                # Default mode: 2:1 compression
-                                output_height = (font.height + 1) // 2  # Round up for odd heights
-                                output_width = font.width
-
-                            style_suffix = "".join(style_parts) if style_parts else ""
-                            dimensions = f"{output_height}x{output_width}"
-
-                            filename = f"{family_name}{style_suffix}{dimensions}.flf"
-
-                            temp_file = temp_path / filename
-                            write(font, temp_file, tall_mode)
-
-                            # Add to tar archive
-                            tar.add(temp_file, arcname=filename)
-
+                for filename, font in outputs.items():
+                    temp_file = Path(temp_dir) / filename
+                    write(font, temp_file, tall_mode)
+                    tar.add(temp_file, arcname=filename)
         print(f"Created archive: {output_path}")
