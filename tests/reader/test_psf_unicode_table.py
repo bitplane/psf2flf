@@ -55,3 +55,13 @@ def test_unmapped_slots_do_not_overwrite_unicode_mappings(tmp_path, psf1):
     font = PSFReader().read(path)
     assert set(font.glyphs) == {"A"}
     assert font.glyphs["A"][0][0] is True
+
+
+@pytest.mark.parametrize("mode,count", [(4, 256), (5, 512)])
+def test_psf1_sequence_mode_reads_unicode_table(tmp_path, mode, count):
+    path = tmp_path / "sequences.psf"
+    table = struct.pack("<5H", 0x03A9, 0xFFFE, 65, 0x0301, 0xFFFF)
+    path.write_bytes(bytes([0x36, 4, mode, 1]) + b"\x80" * count + table + b"\xff\xff" * (count - 1))
+    font = PSFReader().read(path)
+    assert font.meta["psf1"]["has_unicode_table"]
+    assert set(font.glyphs) == {"Ω"}

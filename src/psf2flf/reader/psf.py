@@ -150,7 +150,7 @@ class PSFReader(Reader):
             raise PSFParseError("Invalid zero glyph height")
 
         glyphs = 512 if mode & 0b001 else 256
-        has_unicode_table = bool(mode & 0b010)
+        has_unicode_table = bool(mode & 0b110)
         width = 8
         char_size = height
         bytes_per_row = 1
