@@ -38,3 +38,20 @@ def test_truncated_psf2_bitmap_is_rejected_before_allocating(tmp_path):
 
     with pytest.raises(PSFParseError, match="Truncated bitmap data"):
         PSFReader().read(path)
+
+
+@pytest.mark.parametrize("psf1", [True, False])
+def test_unmapped_slots_do_not_overwrite_unicode_mappings(tmp_path, psf1):
+    path = tmp_path / "mapped.psf"
+    if psf1:
+        header = b"\x36\x04\x02\x01"
+        bitmap = b"\x80" + bytes(255)
+        table = struct.pack("<2H", 65, 0xFFFF) + b"\xff\xff" * 255
+    else:
+        header = b"\x72\xb5\x4a\x86" + struct.pack("<7I", 0, 32, 1, 66, 1, 1, 8)
+        bitmap = b"\x80" + bytes(65)
+        table = b"A\xff" + b"\xff" * 65
+    path.write_bytes(header + bitmap + table)
+    font = PSFReader().read(path)
+    assert set(font.glyphs) == {"A"}
+    assert font.glyphs["A"][0][0] is True

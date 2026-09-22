@@ -180,8 +180,8 @@ class PSFReader(Reader):
             if i in unicode_map:
                 for unicode_val in unicode_map[i]:
                     font.glyphs[chr(unicode_val)] = glyph_data
-            else:
-                # Fallback for glyphs not in the unicode map
+            elif not has_unicode_table:
+                # Index fallback applies only to fonts without a Unicode table
                 if i < 256:
                     print(
                         f"Warning: Glyph {i} (0x{i:02X}) has no Unicode mapping in {font.meta['file_name']}, using fallback chr({i})",
@@ -242,8 +242,8 @@ class PSFReader(Reader):
             if i in unicode_map:
                 for unicode_val in unicode_map[i]:
                     font.glyphs[chr(unicode_val)] = glyph_data
-            else:
-                # Fallback for glyphs not in the unicode map
+            elif not (flags & 1):
+                # Index fallback applies only to fonts without a Unicode table
                 if i < 256:
                     print(
                         f"Warning: Glyph {i} (0x{i:02X}) has no Unicode mapping in {font.meta['file_name']}, using fallback chr({i})",
