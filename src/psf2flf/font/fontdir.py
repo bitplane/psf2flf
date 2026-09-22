@@ -3,6 +3,7 @@ from pathlib import Path
 import tarfile
 from typing import Union
 
+from ..utils import atomic_output
 from .font import Font
 from .typeface import TypeFace
 
@@ -85,10 +86,11 @@ class FontDir:
         from ..writer import write
 
         outputs = self._output_fonts(tall_mode)
-        with tarfile.open(output_path, "w:gz") as tar:
-            with tempfile.TemporaryDirectory() as temp_dir:
+        with atomic_output(output_path) as temporary, tarfile.open(temporary, "w:gz") as tar:
+            with tempfile.TemporaryDirectory(dir=output_path.parent) as temp_dir:
                 for filename, font in outputs.items():
                     temp_file = Path(temp_dir) / filename
                     write(font, temp_file, tall_mode)
                     tar.add(temp_file, arcname=filename)
+                    temp_file.unlink()
         print(f"Created archive: {output_path}")

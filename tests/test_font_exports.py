@@ -34,3 +34,26 @@ def test_duplicate_names_are_rejected_before_writing(tmp_path, archive):
     with pytest.raises(ValueError, match="Duplicate output filename"):
         (fonts.write_tar if archive else fonts.write_directory)(destination)
     assert not destination.exists()
+
+
+@pytest.mark.parametrize("archive", [False, True])
+def test_failed_write_preserves_existing_output(tmp_path, monkeypatch, archive):
+    from psf2flf.writer.flf import FLFWriter
+
+    destination = tmp_path / ("fonts.tar" if archive else "font.flf")
+    destination.write_bytes(b"original output")
+    font = make_font(16)
+    fonts = FontDir()
+    fonts += font
+
+    def fail(*args, **kwargs):
+        raise ValueError("render failed")
+
+    monkeypatch.setattr(FLFWriter, "_render_block_glyph", fail)
+    with pytest.raises(ValueError, match="render failed"):
+        if archive:
+            fonts.write_tar(destination)
+        else:
+            FLFWriter().write(font, destination)
+    assert destination.read_bytes() == b"original output"
+    assert list(tmp_path.iterdir()) == [destination]

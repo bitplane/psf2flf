@@ -57,6 +57,10 @@ def convert_multiple(inputs: list[Path], output: Path, tall_mode: bool = False, 
                 print(f"ERROR reading {input_path}: {e}", file=sys.stderr)
                 had_errors = True
 
+        if not container.typefaces:
+            print("ERROR: No fonts were successfully loaded", file=sys.stderr)
+            return 1
+
         # Write the directory
         try:
             if output.suffix == ".tar":

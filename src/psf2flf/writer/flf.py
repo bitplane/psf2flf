@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from ..font import Font
+from ..utils import atomic_output
 from .writer import Writer
 
 
@@ -45,7 +46,7 @@ class FLFWriter(Writer):
         # The 102 required glyphs are untagged; only extended glyphs have code tags.
         code_tag_count = len(sorted_extended_codepoints)
 
-        with output_path.open("w", encoding="utf-8") as f:
+        with atomic_output(output_path) as temporary, temporary.open("w", encoding="utf-8") as f:
             # Write FLF header with the correct number of characters
             f.write(f"flf2a{hardblank} {fig_height} {fig_height - 1} {max_length} -1 {layout} 0 1 {code_tag_count}\n")
 
