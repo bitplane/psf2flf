@@ -65,3 +65,12 @@ def test_width_variants_are_exported_separately(tmp_path):
     fonts += make_font(16, width=9)
     fonts.write_directory(tmp_path)
     assert {p.name for p in tmp_path.iterdir()} == {"Fixed8x8.flf", "Fixed8x9.flf"}
+
+
+def test_archive_creates_missing_parent_directories(tmp_path):
+    fonts = FontDir()
+    fonts += make_font(16)
+    destination = tmp_path / "new" / "nested" / "fonts.tar"
+    fonts.write_tar(destination)
+    with tarfile.open(destination) as archive:
+        assert archive.getnames() == ["Fixed8x8.flf"]

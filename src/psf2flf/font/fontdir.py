@@ -86,6 +86,7 @@ class FontDir:
         from ..writer import write
 
         outputs = self._output_fonts(tall_mode)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         with atomic_output(output_path) as temporary, tarfile.open(temporary, "w:gz") as tar:
             with tempfile.TemporaryDirectory(dir=output_path.parent) as temp_dir:
                 for filename, font in outputs.items():
