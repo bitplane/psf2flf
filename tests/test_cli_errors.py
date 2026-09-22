@@ -1,3 +1,5 @@
+import pytest
+
 from psf2flf.main import cli
 
 
@@ -18,3 +20,12 @@ def test_invalid_inputs_preserve_existing_archive(tmp_path):
     output.write_bytes(b"original archive")
     assert cli([str(tmp_path / "missing.psf"), str(output)]) == 1
     assert output.read_bytes() == b"original archive"
+
+
+@pytest.mark.parametrize("name", ["fonts.v1", "fonts.tar"])
+def test_explicit_directory_with_suffix(tmp_path, name):
+    output = tmp_path / name
+    assert cli(["tests/data/psf1/Uni1-VGA8.psf.gz", str(output) + "/"]) == 0
+    assert output.is_dir()
+    assert list(output.glob("*.flf"))
+    assert not (tmp_path / "fonts.flf").exists()

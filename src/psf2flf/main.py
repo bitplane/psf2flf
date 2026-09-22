@@ -16,9 +16,10 @@ def show_info(source: Path):
     print(f"codepoints: {len(font.glyphs)}")
 
 
-def is_directory_output(path: Path) -> bool:
+def is_directory_output(path: Path | str) -> bool:
     """Check if the output path indicates a directory."""
     path_str = str(path)
+    path = Path(path)
 
     # Explicit directory indicator (trailing slash) or tar file
     if path_str.endswith("/") or path.suffix == ".tar":
@@ -35,9 +36,12 @@ def is_directory_output(path: Path) -> bool:
     return False
 
 
-def convert_multiple(inputs: list[Path], output: Path, tall_mode: bool = False, force: bool = False):
+def convert_multiple(inputs: list[Path], output: Path | str, tall_mode: bool = False, force: bool = False):
     """Convert multiple input files to single output (font or directory)."""
-    if is_directory_output(output):
+    directory_output = is_directory_output(output)
+    explicit_directory = str(output).endswith("/")
+    output = Path(output)
+    if directory_output:
         # Output is a directory or tar file - use FontDir
         container = FontDir()
         had_errors = False
@@ -63,12 +67,9 @@ def convert_multiple(inputs: list[Path], output: Path, tall_mode: bool = False, 
 
         # Write the directory
         try:
-            if output.suffix == ".tar":
+            if output.suffix == ".tar" and not explicit_directory:
                 container.write_tar(output, tall_mode)
             else:
-                # Ensure output path ends with / for directory
-                if not str(output).endswith("/"):
-                    output = Path(str(output) + "/")
                 container.write_directory(output, tall_mode)
         except Exception as e:
             print(f"ERROR writing output {output}: {e}", file=sys.stderr)
@@ -190,7 +191,7 @@ Examples:
             parser.error("You must provide at least one input file and one output destination.")
 
         inputs = [Path(f) for f in args.files[:-1]]
-        output = Path(args.files[-1])
+        output = args.files[-1]
 
         return convert_multiple(inputs, output, args.tall, args.force)
 
