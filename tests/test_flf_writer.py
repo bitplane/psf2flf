@@ -1,3 +1,5 @@
+import pytest
+
 from psf2flf.font import Font
 from psf2flf.writer.flf import FLFWriter
 
@@ -26,3 +28,14 @@ def test_required_and_extended_glyphs_roundtrip(tmp_path):
     for char in chars:
         assert loaded.chars[ord(char)] == ["█$"]
     assert int(output.read_text().splitlines()[0].split()[-1]) == 8
+
+
+@pytest.mark.parametrize("height,tall", [(1, False), (2, False), (3, False), (1, True), (8, True)])
+def test_header_bounds_cover_serialized_glyphs(tmp_path, height, tall):
+    font = Font(meta={"width": 8, "height": height}, glyphs={"A": ((True,) * 8,) * height})
+    output = tmp_path / "bounds.flf"
+    FLFWriter().write(font, output, tall)
+    header, *lines = output.read_bytes().splitlines()
+    fields = header.split()
+    assert 1 <= int(fields[2]) <= int(fields[1])
+    assert max(map(len, lines)) <= int(fields[3])

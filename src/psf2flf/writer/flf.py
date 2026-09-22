@@ -13,7 +13,7 @@ class FLFWriter(Writer):
     def write(self, font: Font, output_path: Path, tall_mode: bool = False):
         height = font.meta["height"]
         width = font.meta["width"]
-        fig_height, max_length, _ = self._calculate_flf_dimensions(width, height, tall_mode)
+        fig_height, max_length, display_width = self._calculate_flf_dimensions(width, height, tall_mode)
 
         hardblank = "$"
         layout = 0
@@ -48,13 +48,15 @@ class FLFWriter(Writer):
 
         with atomic_output(output_path) as temporary, temporary.open("w", encoding="utf-8") as f:
             # Write FLF header with the correct number of characters
-            f.write(f"flf2a{hardblank} {fig_height} {fig_height - 1} {max_length} -1 {layout} 0 1 {code_tag_count}\n")
+            f.write(
+                f"flf2a{hardblank} {fig_height} {max(1, fig_height - 1)} {max_length} -1 {layout} 0 1 {code_tag_count}\n"
+            )
 
             # Write required glyphs without code tags
             for glyph_data in ascii_glyphs:
                 rendered = self._render_block_glyph(glyph_data, width, height, tall_mode)
                 for i, line in enumerate(rendered):
-                    padded_line = line.replace(" ", hardblank).ljust(max_length, hardblank)
+                    padded_line = line.replace(" ", hardblank).ljust(display_width, hardblank)
                     terminator = "@" if i < len(rendered) - 1 else "@@"
                     f.write(padded_line + terminator + "\n")
 
@@ -66,20 +68,15 @@ class FLFWriter(Writer):
                 f.write(f"0x{cp:X}\n")  # Write character code line
 
                 for i, line in enumerate(rendered):
-                    padded_line = line.replace(" ", hardblank).ljust(max_length, hardblank)
+                    padded_line = line.replace(" ", hardblank).ljust(display_width, hardblank)
                     terminator = "@" if i < len(rendered) - 1 else "@@"
                     f.write(padded_line + terminator + "\n")
 
     def _calculate_flf_dimensions(self, font_width: int, font_height: int, tall_mode: bool):
-        if tall_mode:
-            fig_height = font_height
-            max_length = font_width + 1
-            display_width = font_width
-        else:
-            fig_height = (font_height + 1) // 2
-            max_length = font_width + 1
-            display_width = font_width
-
+        fig_height = font_height if tall_mode else (font_height + 1) // 2
+        display_width = font_width + 1
+        # Block characters occupy three UTF-8 bytes; include spacing and endmarks.
+        max_length = max(3 * font_width + 3, len("0x10FFFF"))
         return fig_height, max_length, display_width
 
     def _render_block_glyph(self, pixel_array: list[list[bool]], width: int, height: int, tall_mode: bool) -> list[str]:
