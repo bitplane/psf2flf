@@ -11,5 +11,9 @@ pytest --cov="src/$package_name"    \
        --cov-report=term-missing    \
        --cov-context=test . 2>&1    | tee htmlcov/coverage_report.txt
 
+test_status=${PIPESTATUS[0]}
+
 # Extract just the missing coverage summary
 grep -A 20 "Missing" htmlcov/coverage_report.txt > htmlcov/missing_coverage.txt || true
+
+exit "$test_status"
