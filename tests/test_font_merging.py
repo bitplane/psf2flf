@@ -175,3 +175,20 @@ class TestRealFonts:
         # Should have more glyphs after merging
         assert len(font1.glyphs) >= initial_glyph_count
         assert font1.meta["charset"] == "Uni1+Uni2"
+
+
+@pytest.mark.parametrize("sizes", [((1, 1), (2, 2)), ((2, 2), (1, 1))])
+def test_force_merge_rejects_dimension_changes_without_mutation(sizes):
+    (w1, h1), (w2, h2) = sizes
+    first = Font(meta={"width": w1, "height": h1}, glyphs={"A": ((True,) * w1,) * h1})
+    second = Font(meta={"width": w2, "height": h2}, glyphs={"B": ((True,) * w2,) * h2})
+    with pytest.raises(ValueError, match="different dimensions"):
+        first.force_merge(second)
+    assert set(first.glyphs) == {"A"}
+
+
+def test_force_merge_allows_different_families_with_matching_dimensions():
+    first = Font(meta={"name": "One", "width": 1, "height": 1})
+    second = Font(meta={"name": "Two", "width": 1, "height": 1}, glyphs={"B": ((True,),)})
+    first.force_merge(second)
+    assert first.glyphs == second.glyphs

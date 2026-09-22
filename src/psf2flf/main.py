@@ -163,7 +163,9 @@ Examples:
     parser.add_argument(
         "--tall", action="store_true", help="Use full-size 1:1 pixel mapping instead of default 2x1 compression"
     )
-    parser.add_argument("--force", action="store_true", help="Force merge incompatible fonts by ignoring conflicts")
+    parser.add_argument(
+        "--force", action="store_true", help="Merge different names/styles; glyph dimensions must match"
+    )
 
     args = parser.parse_args(argv)
 

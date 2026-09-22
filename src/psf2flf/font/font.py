@@ -92,9 +92,12 @@ class Font:
         return self
 
     def force_merge(self, other):
-        """Force merge another font, ignoring compatibility checks."""
+        """Merge despite name/style differences, while preserving glyph dimensions."""
         if not isinstance(other, Font):
             raise TypeError(f"Cannot add {type(other).__name__} to Font")
+
+        if (self.width, self.height) != (other.width, other.height):
+            raise ValueError("Cannot force merge fonts with different dimensions")
 
         # Only add glyphs that don't exist in current font (fill gaps only)
         added_count = 0
