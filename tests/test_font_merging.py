@@ -92,8 +92,8 @@ class TestTypeFace:
         typeface += font
 
         assert frozenset({"Bold"}) in typeface.styles
-        assert 16 in typeface.styles[frozenset({"Bold"})]
-        assert typeface.styles[frozenset({"Bold"})][16] == font
+        assert (16, 8) in typeface.styles[frozenset({"Bold"})]
+        assert typeface.styles[frozenset({"Bold"})][(16, 8)] == font
 
     def test_typeface_add_incompatible_font(self):
         """Test that adding incompatible font to typeface fails."""

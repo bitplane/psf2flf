@@ -9,7 +9,7 @@ class TypeFace:
 
     name: str
     family: str = field(init=False)
-    styles: dict[frozenset[str], dict[int, Font]] = field(default_factory=dict)
+    styles: dict[frozenset[str], dict[tuple[int, int], Font]] = field(default_factory=dict)
 
     def __post_init__(self):
         self.family = self.name
@@ -29,7 +29,7 @@ class TypeFace:
             self.styles[style_key] = {}
 
         size_group = self.styles[style_key]
-        font_size = font.height  # Use height as the size key
+        font_size = (font.height, font.width)
 
         if font_size in size_group:
             # Merge with existing font of same size

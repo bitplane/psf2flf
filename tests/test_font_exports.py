@@ -57,3 +57,11 @@ def test_failed_write_preserves_existing_output(tmp_path, monkeypatch, archive):
             FLFWriter().write(font, destination)
     assert destination.read_bytes() == b"original output"
     assert list(tmp_path.iterdir()) == [destination]
+
+
+def test_width_variants_are_exported_separately(tmp_path):
+    fonts = FontDir()
+    fonts += make_font(16, width=8)
+    fonts += make_font(16, width=9)
+    fonts.write_directory(tmp_path)
+    assert {p.name for p in tmp_path.iterdir()} == {"Fixed8x8.flf", "Fixed8x9.flf"}
