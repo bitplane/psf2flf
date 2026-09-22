@@ -291,68 +291,41 @@ class PSFReader(Reader):
             raise PSFParseError(f"Truncated bitmap data: expected {expected} bytes, found {available}")
 
     def _parse_unicode_table(self, offset: int, glyph_count: int, is_psf1: bool = False) -> dict[int, list[int]]:
-        """Parse PSF1/PSF2 unicode mapping table and return a dictionary."""
-
+        """Read complete mapping entries, validating even unsupported sequences."""
         pos = offset
         unicode_map = {}
-
-        if is_psf1:
-            # PSF1: Each glyph's mapping ends with 0xFFFF (16-bit)
-            for glyph_idx in range(glyph_count):
-                unicode_list = []
+        for glyph_idx in range(glyph_count):
+            unicode_list = []
+            if is_psf1:
                 in_sequences = False
-
-                while pos + 1 < len(self.data):
-                    # Read 16-bit little-endian value
-                    val = self.data[pos] | (self.data[pos + 1] << 8)
+                while True:
+                    if pos + 2 > len(self.data):
+                        raise PSFParseError("Truncated PSF1 Unicode table")
+                    val = int.from_bytes(self.data[pos : pos + 2], "little")
                     pos += 2
-
-                    if val == 0xFFFF:  # End of this glyph's mappings
+                    if val == 0xFFFF:
                         break
-                    elif val == 0xFFFE:  # Start of a multi-codepoint sequence
+                    if val == 0xFFFE:
                         in_sequences = True
+                    elif 0xD800 <= val <= 0xDFFF:
+                        raise PSFParseError("Invalid Unicode surrogate in PSF1 table")
                     elif not in_sequences:
                         unicode_list.append(val)
-
-                if unicode_list:
-                    unicode_map[glyph_idx] = unicode_list
-
-        else:
-            # PSF2: UTF-8 encoded, each glyph's mapping ends with 0xFF
-            for glyph_idx in range(glyph_count):
-                unicode_list = []
-                sequence_bytes = []
-                in_sequences = False
-
-                while pos < len(self.data):
-                    byte = self.data[pos]
-                    pos += 1
-
-                    if byte == 0xFF:  # End of this glyph's mappings
-                        # Only standalone Unicode values can be represented by
-                        # the Font mapping. PSF sequences have no single key.
-                        if sequence_bytes and not in_sequences:
-                            try:
-                                utf8_str = bytes(sequence_bytes).decode("utf-8")
-                                for char in utf8_str:
-                                    unicode_list.append(ord(char))
-                            except UnicodeDecodeError:
-                                pass
-                        break
-                    elif byte == 0xFE:  # Start of a multi-codepoint sequence
-                        if sequence_bytes and not in_sequences:
-                            try:
-                                utf8_str = bytes(sequence_bytes).decode("utf-8")
-                                for char in utf8_str:
-                                    unicode_list.append(ord(char))
-                            except UnicodeDecodeError:
-                                pass
-                        sequence_bytes = []
-                        in_sequences = True
-                    elif not in_sequences:
-                        sequence_bytes.append(byte)
-
-                if unicode_list:
-                    unicode_map[glyph_idx] = unicode_list
-
+            else:
+                end = self.data.find(b"\xff", pos)
+                if end < 0:
+                    raise PSFParseError("Truncated PSF2 Unicode table")
+                parts = self.data[pos:end].split(b"\xfe")
+                try:
+                    decoded = [part.decode("utf-8") for part in parts]
+                except UnicodeDecodeError as error:
+                    raise PSFParseError("Invalid UTF-8 in PSF2 Unicode table") from error
+                if any(not part for part in decoded[1:]):
+                    raise PSFParseError("Empty sequence in PSF2 Unicode table")
+                unicode_list = list(map(ord, decoded[0]))
+                pos = end + 1
+            if unicode_list:
+                unicode_map[glyph_idx] = unicode_list
+        if pos != len(self.data):
+            raise PSFParseError("Trailing data after Unicode table")
         return unicode_map

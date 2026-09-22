@@ -65,3 +65,31 @@ def test_psf1_sequence_mode_reads_unicode_table(tmp_path, mode, count):
     font = PSFReader().read(path)
     assert font.meta["psf1"]["has_unicode_table"]
     assert set(font.glyphs) == {"Ω"}
+
+
+@pytest.mark.parametrize(
+    "data,psf1",
+    [
+        (b"", True),
+        (b"A\x00", True),
+        (b"\xff", True),
+        (b"", False),
+        (b"A", False),
+        (b"\xc0\xff", False),
+        (b"A\xfe\xc0\xff", False),
+        (b"\xffgarbage", False),
+    ],
+)
+def test_malformed_unicode_tables_are_rejected(data, psf1):
+    reader = PSFReader()
+    reader.data = data
+    with pytest.raises(PSFParseError):
+        reader._parse_unicode_table(0, 1, is_psf1=psf1)
+
+
+@pytest.mark.parametrize("psf1", [True, False])
+def test_unicode_table_requires_an_entry_for_every_glyph(psf1):
+    reader = PSFReader()
+    reader.data = b"\xff\xff" if psf1 else b"\xff"
+    with pytest.raises(PSFParseError, match="Truncated"):
+        reader._parse_unicode_table(0, 2, is_psf1=psf1)
